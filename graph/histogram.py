@@ -71,7 +71,7 @@ scatter = ax.scatter(x, y, c=norm_y, cmap='viridis', marker='o')
 # Add labels and title
 plt.xlabel('X Time ms')
 plt.ylabel('Y Chunk of memory')
-plt.title('Memory allocation pic')
+plt.title(f'Memory allocation pic {args.file}')
 
 plt.ticklabel_format(style='plain', axis='both')
 

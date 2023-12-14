@@ -10,8 +10,8 @@
 #include <dlfcn.h>
 #include <stdio.h>
 
-// #define CATCH_POSIX_MEMALIGN
-#define CATCH_TORCH_ALLOC_CPU
+#define CATCH_POSIX_MEMALIGN
+//#define CATCH_TORCH_ALLOC_CPU
 #define show_err(cnd, x) if(cnd) { std::cout << "[ERROR-LIVEMEM]: " << x << std::endl; exit(1); };
 #define show_info(x) do { std::cout << "[INFO-LIVEMEM]: " << x << std::endl; } while(0);
 //#define show_debug(x) do { std::cout << "[DEBUG-LIVEMEM]: " << x << std::endl; } while(0);
