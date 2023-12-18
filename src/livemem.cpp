@@ -3,6 +3,9 @@
 #include <iomanip>
 #include <mutex>
 #include <unistd.h>
+#include <map>
+#include <set>
+#include <algorithm>
 extern "C" {
 
 #ifdef CATCH_POSIX_MEMALIGN
@@ -28,25 +31,93 @@ void hello_livemem() {
 
 std::mutex mx;
 
-std::unordered_map<size_t,std::vector<std::chrono::_V2::system_clock::time_point>> mstamp;
 
-void addTimeStampForChunk(size_t bytes) {
 
-    auto current = std::chrono::high_resolution_clock::now();
-    std::lock_guard<decltype(mx)> l(mx);
-    auto it = mstamp.find(bytes);
+struct CoreValueMeta_t {
 
-    if(it==mstamp.end())
+    std::vector<std::chrono::_V2::system_clock::time_point> timepoints;
+    std::set<void*>  unique_mem;   
+    size_t maximum;   
+    void CalculateMax() {  
+        maximum= std::max(unique_mem.size(),maximum);
+    }
+
+    CoreValueMeta_t(std::chrono::_V2::system_clock::time_point curr,  void* mem) : timepoints{curr}, unique_mem{mem} , maximum{1}  {
+           
+          timepoints.reserve(1024*1024*5); 
+
+    }
+
+};
+
+
+using CoreValue_t = std::unordered_map<size_t,CoreValueMeta_t>;
+
+std::unordered_map<std::string, CoreValue_t > core_map;
+
+
+void addInfoAboutAllocatedChunk(const char* label, void* ptr_mem,  size_t bytes) {
+
+    auto current = std::chrono::high_resolution_clock::now();    
+   
+    std::lock_guard<decltype(mx)> l(mx);   
+
+    auto it_core = core_map.find(label);
+    if(it_core == core_map.end())
     {
-         std::vector<std::chrono::_V2::system_clock::time_point> v{current};
-         v.reserve(1024*1024*5);
-         mstamp.emplace(bytes, std::move(v));
+          CoreValueMeta_t meta(current,ptr_mem);
+          core_map.emplace(label, CoreValue_t{ { bytes, std::move(meta) } }  );
 
     } else {
-        it->second.push_back(current);
-    }   
+
+                CoreValue_t& cval = it_core->second;
+                  
+                auto it_cval = cval.find(bytes);
+           
+                if(it_cval == cval.end())
+                {
+                       CoreValueMeta_t meta(current,ptr_mem);
+                       cval.emplace( bytes, std::move(meta) );
+
+                } else {
+
+                       it_cval->second.timepoints.push_back(current);
+                       it_cval->second.unique_mem.insert(ptr_mem);
+                       it_cval->second.CalculateMax();
+
+                }
+        
+    } 
+
+
+
+    
+
+} 
+
+void addInfoAboutDeallocatedChunk(const char* label, void* ptr_mem) {
+
+    std::lock_guard<decltype(mx)> l(mx);
+    auto& mcore = core_map[label];
+   
+    auto it = livemem::find_if(mcore.begin(),mcore.end(),
+           [ptr_mem](auto& p){  auto num =  p.second.unique_mem.erase(ptr_mem);
+                           if(num)
+                           {
+                              p.second.CalculateMax();
+                              return true;
+                           }  
+                           return false;                
+            } );
+         
+
+    show_err(it==mcore.end(), "How it's possible ? Lost pointer ?!!!" ); 
+    
                  
 } 
+
+
+
 
 class VirtualStream {
 public:
@@ -78,88 +149,111 @@ private:
 
  struct Stat {
 
-    void toJson() {
-
-          std::stringstream ss;
-          ss << "livemem_" << getpid() << ".json";
-          std::ofstream o(ss.str().c_str());         
-         
-          #define JWRITE(x) o << x << std::endl;
+    void toJson(const std::unordered_map<std::string, livemem::CoreValue_t>& cmap) {
 
 
-           JWRITE("{");         
-            
-               auto flag = 0; 
-               for(auto& pair : mstamp)
-               {
-                    if(flag)
-                    {   
-                      o << ","; 
-                    } else {
-                      flag = 1;
-                    } 
+          for(auto& c: cmap)
+          {
+               std::stringstream ss;
+               ss << "livemem_" << c.first  << "_" << getpid() << ".json";
+               std::ofstream o(ss.str().c_str());         
+              
+               #define JWRITE(x) o << x << std::endl;
+          
+                JWRITE("{");         
+                 
+                    auto flag = 0; 
 
-                    JWRITE( "\"" << pair.first << "\" : [");
-
-                     for(size_t i=0;i<pair.second.size();++i)
-                     {
-                           auto& v = pair.second[i];
-                           if(i)
-                              o << ",";                           
-                           auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(v.time_since_epoch());
-                           JWRITE(  duration.count() );
-                     }   
-                      
-                    JWRITE("]")
-
-               }
-            
-           JWRITE("}");
-           show_info("JSON data: " << ss.str())
-           
+                 
+                    for(auto& pair : c.second)
+                    {
+                         if(flag)
+                         {   
+                           o << ","; 
+                         } else {
+                           flag = 1;
+                         } 
+     
+                         JWRITE( "\"" << pair.first << "\" : [");
+     
+                          for(size_t i=0;i<pair.second.timepoints.size();++i)
+                          {
+                                auto& v = pair.second.timepoints[i];
+                                if(i)
+                                   o << ",";                           
+                                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(v.time_since_epoch());
+                                JWRITE(  duration.count() );
+                          }   
+                           
+                         JWRITE("]")
+     
+                    }
+                 
+                JWRITE("}");
+                show_info("JSON data: " << ss.str())
+          } 
 
     } 
 
 
+     void toStdoutAndFile(const std::unordered_map<std::string, livemem::CoreValue_t>& cmap) {
+
+          for(auto& c: cmap)
+          {
+                  std::stringstream ss;
+                  ss << "livemem_" << c.first << "_" << getpid() << ".txt";
+                  VirtualStream o(ss.str());        
+        
+                  std::string hd = "+-----------chunk-------|----------count---------|---------------payload------------|--MAX-usage----|----Leak-----+"; 
+                  o << hd << std::endl;
+                 
+                std::map<size_t,livemem::CoreValueMeta_t> cc(c.second.begin(),c.second.end());  
+ 
+                for(auto& pair : cc)    
+                {
+                    o << std::setw(24) <<   pair.first  <<  "|" << std::setw(24) << pair.second.timepoints.size() << "|" << std::setw(34) << (pair.first * pair.second.timepoints.size()) << "|"<<  std::setw(15) << pair.second.maximum <<  "|"<<  std::setw(13) << pair.second.unique_mem.size() << "|" << std::endl;
+                    o << std::setfill('-') << std::setw(hd.size()-1) << "-" << std::setfill(' ') << "|" << std::endl;
+                }
+                  show_info("Report created in " << ss.str());
+    
+          }
+
+     }
+
+
     ~Stat() {
 
-          std::stringstream ss;
-          ss << "livemem_" << getpid() << ".txt";
-          VirtualStream o(ss.str());        
+            toJson(core_map);
+            toStdoutAndFile(core_map);
 
-          std::string hd = "+-----------chunk-------|----------count---------|---------------payload------------+"; 
-          o << hd << std::endl;
-          for(auto pair: mstamp)
-          {
-             o << std::setw(24) <<   pair.first  <<  "|" << std::setw(24) << pair.second.size() << "|" << std::setw(34) << (pair.first * pair.second.size()) << "|" << std::endl;
-             o << std::setfill('-') << std::setw(hd.size()-1) << "-" << std::setfill(' ') << "|" << std::endl;
-          } 
-         
-          show_info("Report created in " << ss.str());
-          toJson();
     }
  };
 
 
- Stat s;
+Stat s;
 
+ const char* LIBNAME = "libc10.so";
+// const char* LIBNAME = "libcheat.so";
 
 }
-
-
 
 #ifdef CATCH_TORCH_ALLOC_CPU
 namespace c10 {
 
     void *alloc_cpu(size_t nbytes) {
-
+               
        if(!c10::original_alloc_cpu)
-                 assing_handler(c10::original_alloc_cpu,"_ZN3c109alloc_cpuEm","libc10.so");
-       
+       {         
+          livemem::assing_handler(c10::original_alloc_cpu,"_ZN3c109alloc_cpuEm",livemem::LIBNAME);           
+       }
+
         show_debug("alloc_cpu() bytes=" << nbytes);
-        livemem::addTimeStampForChunk(nbytes);
+
+        void* p = original_alloc_cpu(nbytes); 
+
+        livemem::addInfoAboutAllocatedChunk(livemem::LIBNAME,p,nbytes);
       
-        return original_alloc_cpu(nbytes);
+        return p;
 
     }
 
@@ -168,7 +262,12 @@ namespace c10 {
            show_debug("free_cpu() data=" << data);
 
            if(!c10::original_free_cpu)
-                  assing_handler(c10::original_free_cpu,"_ZN3c108free_cpuEPv","libc10.so");           
+           {
+               livemem::assing_handler(c10::original_free_cpu,"_ZN3c108free_cpuEPv",livemem::LIBNAME);           
+           }
+
+           livemem::addInfoAboutDeallocatedChunk(livemem::LIBNAME,data);    
+          
            original_free_cpu(data);
 
     }

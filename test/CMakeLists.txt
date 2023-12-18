@@ -25,3 +25,13 @@ foreach(T IN ITEMS ${TESTS_NAMES_NO_LINK})
 
 
 endforeach()
+
+
+add_library(cheat SHARED cheatlib.cpp)
+add_executable(cheatexe cheatexe.cpp)
+add_executable(grow_mem grow_mem.cpp)
+#target_link_libraries(cheatexe PRIVATE cheat tsan)
+target_link_libraries(cheatexe PRIVATE cheat)
+
+add_test(NAME CHEATLIBSETUP COMMAND cheatexe )
+set_tests_properties(CHEATLIBSETUP PROPERTIES ENVIRONMENT "LD_PRELOAD=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/liblivemem_fortestonly.so")

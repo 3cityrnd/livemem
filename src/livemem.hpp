@@ -27,7 +27,7 @@ posix_memalign_type original_posix_memalign;
 int posix_memalign(void **memptr, size_t alignment, size_t size);
 #endif
 
-}
+} /* end of extern C */
 
 
 
@@ -76,9 +76,6 @@ std::unordered_map<std::string,dl_ptr> file_handlers;
 
 static const char* self_maps = "/proc/self/maps";
 
-} /* end of livemem */
-
-
 
 std::string get_full_path_libso_from_maps(const std::string& soname) {
  
@@ -102,7 +99,6 @@ std::string get_full_path_libso_from_maps(const std::string& soname) {
 
  return proc_so; 
 }
-
 
 
 
@@ -140,6 +136,28 @@ void assing_handler(T& handler, const char* symbol_name, const std::string& file
  show_err(!handle, "Can't init handler for [" << symbol_name << "]");
 
 }
+
+
+template<class I, class F>
+I find_if(I b, I e , F f) {
+
+       while(b!=e)
+       {
+         if(f(*b))
+         {
+            return b;
+         }
+         ++b;
+       }
+       return e;
+}
+
+
+
+} /* end of livemem */
+
+
+
 
 
 void __attribute__((constructor)) my_init_function(void) {
