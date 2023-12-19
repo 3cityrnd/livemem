@@ -12,6 +12,7 @@
 
 // #define CATCH_POSIX_MEMALIGN
 #define CATCH_TORCH_ALLOC_CPU
+#define CATCH_DGL_WRAP
 #define show_err(cnd, x) if(cnd) { std::cout << "[ERROR-LIVEMEM]: " << x << std::endl; exit(1); };
 #define show_info(x) do { std::cout << "[INFO-LIVEMEM]: " << x << std::endl; } while(0);
 //#define show_debug(x) do { std::cout << "[DEBUG-LIVEMEM]: " << x << std::endl; } while(0);
@@ -42,6 +43,22 @@ namespace c10 {
 
     void *alloc_cpu(size_t nbytes);
     void free_cpu(void *data);
+}
+#endif
+
+
+#ifdef CATCH_DGL_WRAP
+namespace dgl {
+
+    typedef int (*wrap_alloc_t)(void** ptr, size_t alignment, size_t nbytes);
+    typedef void (*wrap_free_t)(void *data);
+    
+    wrap_alloc_t original_wrap_alloc;
+    wrap_free_t original_wrap_free;
+
+    int wrap_alloc(void** ptr, size_t alignment, size_t nbytes);
+    void wrap_free(void *data);
+
 }
 #endif
 

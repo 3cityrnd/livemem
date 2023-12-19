@@ -274,3 +274,38 @@ namespace c10 {
 }
 #endif
 
+
+#ifdef CATCH_DGL_WRAP
+namespace dgl {
+
+   
+   
+    int wrap_alloc(void** ptr, size_t alignment, size_t nbytes) {
+
+        if(!dgl::original_wrap_alloc)
+        {   
+           livemem::assing_handler(dgl::original_wrap_alloc,"_ZN3dgl10wrap_allocEPPvmm","libdgl.so");   
+        }
+
+        int ret = dgl::original_wrap_alloc(ptr,alignment,nbytes);
+
+        livemem::addInfoAboutAllocatedChunk("libdgl.so",*ptr,nbytes);      
+
+        return ret; 
+
+
+    }
+    void wrap_free(void *data) {
+
+          if(!dgl::original_wrap_free)
+          {
+              livemem::assing_handler(dgl::original_wrap_free,"_ZN3dgl9wrap_freeEp","libdgl.so");   
+          }
+
+         livemem::addInfoAboutDeallocatedChunk("libdgl.so",data);  
+
+         dgl::original_wrap_free(data);  
+    }
+
+}
+#endif
