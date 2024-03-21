@@ -125,6 +125,7 @@ python livemem/graph/histogram.py --file livemem_10634.json
 
 ```
 
+![rgat_train](https://github.com/3cityrnd/livemem/assets/152857609/a215100d-8837-4bb4-b99f-b97d996bf163)
 
 
 
