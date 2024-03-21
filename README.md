@@ -1,4 +1,4 @@
-# livemem
+# livemem - PyTorch Memory Allocation Chunk Analyzer 
 
 Download
 
