@@ -125,7 +125,13 @@ python livemem/graph/histogram.py --file livemem_10634.json
 
 ```
 
+- GAT
+
 ![rgat_train](https://github.com/3cityrnd/livemem/assets/152857609/a215100d-8837-4bb4-b99f-b97d996bf163)
 
+
+- GrahSage Node classification full graph
+
+![graph_sage_node_classification](https://github.com/3cityrnd/livemem/assets/152857609/2f1d9913-2b76-4896-bbb7-a7012c4e4a3e)
 
 
